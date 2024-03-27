@@ -50,9 +50,9 @@
 <body>
     <div class="login-container">
         <h2>Login</h2>
-        {% if error %}
+        <!-- {% if error %}
             <p style="color: red;">{{ error }}</p>
-        {% endif %}
+        {% endif %} -->
         <form action="/login" method="post">
             <div>
                 <input type="text" id="username" name="username" placeholder="Username" required>
@@ -63,7 +63,7 @@
             <div>
                 <button type="submit">Login</button>
             </div>
-            <p class="info-text">Remember it's the Phrase username, the one you find in your Phrase profile, not your email.</p>
+            <p class="info-text">REMEMBER -  Enter Phrase username, the one you find in your Phrase profile, not your email.</p>
         </form>
     </div>
 </body>
