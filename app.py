@@ -77,39 +77,39 @@ def show_login_form():
 
 def main():
     apply_custom_styles()
-    # If not  logged in, redirect to the login page
+    # If not logged in, redirect to the login page
     if 'access_token' not in st.session_state:
         show_login_form()
     else:
-         with st.container():
+        with st.container():
             st.markdown("## URL Page", unsafe_allow_html=True)
             user_url = st.text_input("Enter the project URL:", key="user_url")
-            st.markdown("<p class='info-text'>REMEMBER - Enter the full project URL including the 'https://'</p>", unsafe_allow_html=True)
+            st.markdown("<p class='info-text'>REMEMBER - Enter the full project URL including the 'https://'.</p>", unsafe_allow_html=True)
             if st.button("Submit", key="submit_url"):
                 project_id = extract_project_id(user_url)
-            if project_id:
-                get_list_analyses_project = f"https://cloud.memsource.com/web/api2/v3/projects/{project_id}/analyses"
-                headers = {"Authorization": f"ApiToken {st.session_state['access_token']}"}
-                response = requests.get(get_list_analyses_project, headers=headers)
-                if response.status_code == 200:
-                    analyses = response.json().get("content")
-                    analyseUid = analyses[0]['uid'] if analyses else None
-                    if analyseUid:
-                        download_analysis = f"https://cloud.memsource.com/web/api2/v1/analyses/{analyseUid}/download?format=csv"
-                        response = requests.get(download_analysis, headers=headers, stream=True)
-                        if response.status_code == 200:
-                            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-                                shutil.copyfileobj(response.raw, tmp_file)
-                                st.success("Analysis downloaded successfully.")
-                                st.download_button(label="Download Analysis CSV", data=tmp_file.name, file_name="analysis.csv")
+                if project_id:
+                    get_list_analyses_project = f"https://cloud.memsource.com/web/api2/v3/projects/{project_id}/analyses"
+                    headers = {"Authorization": f"ApiToken {st.session_state['access_token']}"}
+                    response = requests.get(get_list_analyses_project, headers=headers)
+                    if response.status_code == 200:
+                        analyses = response.json().get("content")
+                        analyseUid = analyses[0]['uid'] if analyses else None
+                        if analyseUid:
+                            download_analysis = f"https://cloud.memsource.com/web/api2/v1/analyses/{analyseUid}/download?format=csv"
+                            response = requests.get(download_analysis, headers=headers, stream=True)
+                            if response.status_code == 200:
+                                with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                                    shutil.copyfileobj(response.raw, tmp_file)
+                                    st.success("Analysis downloaded successfully.")
+                                    st.download_button(label="Download Analysis CSV", data=tmp_file.name, file_name="analysis.csv")
+                            else:
+                                st.error("Failed to download analysis.")
                         else:
-                            st.error("Failed to download analysis.")
+                            st.error("AnalyseUid not found.")
                     else:
-                        st.error("AnalyseUid not found.")
+                        st.error("Failed to retrieve project information.")
                 else:
-                    st.error("Failed to retrieve project information.")
-            else:
-                st.error("Project ID not found in URL.")
+                    st.error("Project ID not found in URL.")
 
 if __name__ == "__main__":
     main()
