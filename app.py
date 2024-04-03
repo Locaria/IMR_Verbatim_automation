@@ -49,7 +49,7 @@ def apply_custom_styles():
             background-color: #0056b3;
         }
         .info-text {
-            font-size: 0.8em;
+            font-size: 1em;
             margin-top: 10px;
             color: #666;
             text-align: center;
@@ -64,7 +64,7 @@ def show_login_form():
     username = st.text_input("Username", key="username")
     password = st.text_input("Password", type="password", key="password")
     st.markdown("""
-    <p class="info-text">REMEMBER - Enter Phrase username, not your email.</p>
+    <p class="info-text">REMEMBER - Enter your Phrase username, not your email.</p>
     """, unsafe_allow_html=True)
     if st.button("Login"):
         token = login(username, password)
