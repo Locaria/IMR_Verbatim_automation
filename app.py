@@ -75,8 +75,6 @@ def show_login_form():
         else:
             st.error("Failed to login. Please check your credentials.")
 
-show_login_form()
-
 def main():
     # If not  logged in, redirect to the login page
     if 'access_token' not in st.session_state:
