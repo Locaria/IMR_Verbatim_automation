@@ -1,89 +1,69 @@
-from flask import Flask, request, send_file, render_template, redirect, url_for, after_this_request, flash, session
+import streamlit as st
 import requests
 import re
-import os
+import tempfile
+import shutil
 
-app = Flask(__name__)
-app.secret_key = 'Alohomora1!@#'
-
+# Definição de função para extrair project_id da URL
 def extract_project_id(url):
     pattern = re.compile(r"/show/([A-Za-z0-9]+)")
     match = pattern.search(url)
     return match.group(1) if match else None
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+# Função para fazer login e retornar token
+def login(username, password):
+    auth_url = "https://cloud.memsource.com/web/api2/v1/auth/login"
+    credentials = {"userName": username, "password": password}
+    response = requests.post(auth_url, json=credentials)
+    return response.json().get("token") if response.status_code == 200 else None
 
-        auth_url = "https://cloud.memsource.com/web/api2/v1/auth/login"
-        credentials = {"userName": username, "password": password}
-        response = requests.post(auth_url, json=credentials)
-
-        if response.status_code == 200:
-            session['access_token'] = response.json().get("token")
-            flash('You were successfully logged in')
-            return redirect(url_for('index'))
+# Tela de login
+def show_login_form():
+    st.subheader("Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        token = login(username, password)
+        if token:
+            st.session_state['access_token'] = token
+            st.success("Logged in successfully.")
+            st.experimental_rerun()
         else:
-            flash("Fail to authenticate. Please, enter your credentials again")
-    return render_template('login.html')
+            st.error("Failed to login. Please check your credentials.")
 
-@app.route('/logout')
-def logout():
-    session.pop('access_token', None)
-    return redirect(url_for('login'))
+# Função principal
+def main():
+    # Se não estiver logado, mostra a tela de login
+    if 'access_token' not in st.session_state:
+        show_login_form()
+    else:
+        st.subheader("URL Page")
+        user_url = st.text_input("Enter the URL of the project:")
+        if st.button("Submit"):
+            project_id = extract_project_id(user_url)
+            if project_id:
+                get_list_analyses_project = f"https://cloud.memsource.com/web/api2/v3/projects/{project_id}/analyses"
+                headers = {"Authorization": f"ApiToken {st.session_state['access_token']}"}
+                response = requests.get(get_list_analyses_project, headers=headers)
+                if response.status_code == 200:
+                    analyses = response.json().get("content")
+                    analyseUid = analyses[0]['uid'] if analyses else None
+                    if analyseUid:
+                        download_analysis = f"https://cloud.memsource.com/web/api2/v1/analyses/{analyseUid}/download?format=csv"
+                        response = requests.get(download_analysis, headers=headers, stream=True)
+                        if response.status_code == 200:
+                            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                                shutil.copyfileobj(response.raw, tmp_file)
+                                st.success("Analysis downloaded successfully.")
+                                st.download_button(label="Download Analysis CSV", data=tmp_file.name, file_name="analysis.csv")
+                        else:
+                            st.error("Failed to download analysis.")
+                    else:
+                        st.error("AnalyseUid not found.")
+                else:
+                    st.error("Failed to retrieve project information.")
+            else:
+                st.error("Project ID not found in URL.")
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    if 'access_token' not in session:
-        flash('User not authenticated. Returning to login')
-        return redirect(url_for('login'))
-    
-    flash('URL page')
-    
-    if request.method == 'POST':
-        user_url = request.form['url']
-        project_id = extract_project_id(user_url)
-        if not project_id:
-            flash("Project ID not found in URL.")
-            return render_template('index.html')
-
-        access_token = session['access_token']
-
-        get_list_analyses_project = f"https://cloud.memsource.com/web/api2/v3/projects/{project_id}/analyses"
-        headers = {"Authorization": f"ApiToken {access_token}"}
-        response = requests.get(get_list_analyses_project, headers=headers)
-        if response.status_code != 200:
-            flash("Failed to retrieve project information.")
-            return render_template('index.html')
-
-        analyses = response.json().get("content")
-        analyseUid = analyses[0]['uid'] if analyses else None  
-        if not analyseUid:
-            flash("AnalyseUid not found.")
-            return render_template('index.html')
-
-        download_analysis = f"https://cloud.memsource.com/web/api2/v1/analyses/{analyseUid}/download?format=csv"
-        response = requests.get(download_analysis, headers=headers, stream=True)
-        if response.status_code == 200:
-            file_path = "analysis.csv"
-            with open(file_path, "wb") as file:
-                for chunk in response.iter_content(chunk_size=1024):
-                    file.write(chunk)
-
-            @after_this_request
-            def cleanup(response):
-                try:
-                    os.remove(file_path)
-                except Exception as error:
-                    app.logger.error("Error removing downloaded file.", error)
-                return response
-
-            return send_file(file_path, as_attachment=True)
-        else:
-            flash("Failed to download analysis.")
-    return render_template('index.html')
-
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    main()
