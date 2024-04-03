@@ -17,19 +17,50 @@ def login(username, password):
     response = requests.post(auth_url, json=credentials)
     return response.json().get("token") if response.status_code == 200 else None
 
-# Tela de login
+# Aplicar estilos CSS personalizados
+def apply_custom_styles():
+    st.markdown("""
+        <style>
+        .login-container {
+            margin: 0 auto;
+            width: 300px;
+        }
+        .stTextInput>div>div>input {
+            margin-bottom: -38px;
+        }
+        .stButton>button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 20px; /* Ajuste conforme necessário */
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .stButton>button:hover {
+            background-color: #0056b3;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+# Tela de login com estilos aplicados
 def show_login_form():
-    st.subheader("Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        token = login(username, password)
-        if token:
-            st.session_state['access_token'] = token
-            st.success("Logged in successfully.")
-            st.experimental_rerun()
-        else:
-            st.error("Failed to login. Please check your credentials.")
+    apply_custom_styles()  # Aplicar os estilos CSS
+    st.subheader("Login", anchor=None)
+    with st.container():
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            username = st.text_input("Username", key="username")
+            password = st.text_input("Password", type="password", key="password")
+            if st.button("Login"):
+                token = login(username, password)
+                if token:
+                    st.session_state['access_token'] = token
+                    st.success("Logged in successfully.")
+                    st.experimental_rerun()
+                else:
+                    st.error("Failed to login. Please check your credentials.")
 
 # Função principal
 def main():
@@ -38,7 +69,7 @@ def main():
         show_login_form()
     else:
         st.subheader("URL Page")
-        user_url = st.text_input("Enter the URL of the project:")
+        user_url = st.text_input("Enter the project URL:")
         if st.button("Submit"):
             project_id = extract_project_id(user_url)
             if project_id:
