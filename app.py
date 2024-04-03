@@ -4,34 +4,41 @@ import re
 import tempfile
 import shutil
 
-# Definição de função para extrair project_id da URL
+# URL extract function
 def extract_project_id(url):
     pattern = re.compile(r"/show/([A-Za-z0-9]+)")
     match = pattern.search(url)
     return match.group(1) if match else None
-
-# Função para fazer login e retornar token
+# Login function
 def login(username, password):
     auth_url = "https://cloud.memsource.com/web/api2/v1/auth/login"
     credentials = {"userName": username, "password": password}
     response = requests.post(auth_url, json=credentials)
     return response.json().get("token") if response.status_code == 200 else None
 
-# Aplicar estilos CSS personalizados
+# cosmetic CSS changes to the form
 def apply_custom_styles():
     st.markdown("""
         <style>
-        .login-container {
+        .reportview-container .main .block-container {
+            max-width: 330px;
+            padding-top: 5rem;
             margin: 0 auto;
-            width: 300px;
+        }
+        .reportview-container .main {
+            color: #000;
+            background-color: #fff;
+        }
+        .block-container .markdown-text-container {
+            padding-bottom: 0;
         }
         .stTextInput>div>div>input {
-            margin-bottom: -38px;
+            margin-bottom: 0px;
         }
         .stButton>button {
             width: 100%;
             padding: 10px;
-            margin-top: 20px; /* Ajuste conforme necessário */
+            margin-top: 20px;
             background-color: #007bff;
             color: white;
             border: none;
@@ -41,30 +48,37 @@ def apply_custom_styles():
         .stButton>button:hover {
             background-color: #0056b3;
         }
+        .info-text {
+            font-size: 0.8em;
+            margin-top: 10px;
+            color: #666;
+            text-align: center;
+        }
         </style>
         """, unsafe_allow_html=True)
 
-# Tela de login com estilos aplicados
+# Login and CSS
 def show_login_form():
-    apply_custom_styles()  # Aplicar os estilos CSS
-    st.subheader("Login", anchor=None)
-    with st.container():
-        col1, col2, col3 = st.columns([1,2,1])
-        with col2:
-            username = st.text_input("Username", key="username")
-            password = st.text_input("Password", type="password", key="password")
-            if st.button("Login"):
-                token = login(username, password)
-                if token:
-                    st.session_state['access_token'] = token
-                    st.success("Logged in successfully.")
-                    st.experimental_rerun()
-                else:
-                    st.error("Failed to login. Please check your credentials.")
+    apply_custom_styles()  
+    st.markdown("## Login")
+    username = st.text_input("Username", key="username")
+    password = st.text_input("Password", type="password", key="password")
+    st.markdown("""
+    <p class="info-text">REMEMBER - Enter Phrase username, not your email.</p>
+    """, unsafe_allow_html=True)
+    if st.button("Login"):
+        token = login(username, password)
+        if token:
+            st.session_state['access_token'] = token
+            st.success("Logged in successfully.")
+            st.experimental_rerun()
+        else:
+            st.error("Failed to login. Please check your credentials.")
 
-# Função principal
+show_login_form()
+
 def main():
-    # Se não estiver logado, mostra a tela de login
+    # If not  logged in, redirect to the login page
     if 'access_token' not in st.session_state:
         show_login_form()
     else:
