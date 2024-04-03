@@ -76,14 +76,17 @@ def show_login_form():
             st.error("Failed to login. Please check your credentials.")
 
 def main():
+    apply_custom_styles()
     # If not  logged in, redirect to the login page
     if 'access_token' not in st.session_state:
         show_login_form()
     else:
-        st.subheader("URL Page")
-        user_url = st.text_input("Enter the project URL:")
-        if st.button("Submit"):
-            project_id = extract_project_id(user_url)
+         with st.container():
+            st.markdown("## URL Page", unsafe_allow_html=True)
+            user_url = st.text_input("Enter the project URL:", key="user_url")
+            st.markdown("<p class='info-text'>REMEMBER - Enter the full project URL including the 'https://'</p>", unsafe_allow_html=True)
+            if st.button("Submit", key="submit_url"):
+                project_id = extract_project_id(user_url)
             if project_id:
                 get_list_analyses_project = f"https://cloud.memsource.com/web/api2/v3/projects/{project_id}/analyses"
                 headers = {"Authorization": f"ApiToken {st.session_state['access_token']}"}
