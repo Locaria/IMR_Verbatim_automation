@@ -360,11 +360,12 @@ else:
             project_name = project_name[:100]
              # Check if sheet exists and delete if it does
         try:
-            existing_sheet = spreadsheet_mt.worksheet(project_name)
+            existing_sheet = spreadsheet_mtpe.worksheet(project_name)
             spreadsheet_mtpe.del_worksheet(existing_sheet)
             print(f"Existing sheet '{project_name}' deleted.")
         except gspread.exceptions.WorksheetNotFound:
             pass  # Sheet does not exist, no action needed
+        
         new_sheet = spreadsheet_mtpe.add_worksheet(title=project_name, rows="100", cols="20")#spreadsheet_mtpe
         subprojects = final_df_MTPE[final_df_MTPE['ProjectID'] == project_id]
         subprojects_list = subprojects.values.tolist()
