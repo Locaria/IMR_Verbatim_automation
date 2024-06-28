@@ -293,6 +293,17 @@ final_df_MT = final_df[(final_df['Project_Type'] == 'Master Project') | (final_d
 # Creating final_df_MTPE df in order to push to a diff G-sheet
 final_df_MTPE = final_df[(final_df['Project_Type'] == 'Master Project') | (final_df['Project_Type'] == 'MTPE')]
 
+# Identify Projects IDs with at least one Subproject 
+project_ids_with_subprojects = final_df_MT[final_df_MT['Project_Order'] == 'Subproject']['ProjectID'].unique()
+
+# Filter the final_df to have only sheets that a Master Project has a subproject -- team request
+final_df_MT = final_df_MT[final_df_MT['ProjectID'].isin(project_ids_with_subprojects)]
+
+# Identify Projects IDs with at least one Subproject 
+project_ids_with_subprojects = final_df_MTPE[final_df_MTPE['Project_Order'] == 'Subproject']['ProjectID'].unique()
+
+# Filter the final_df to have only sheets that a Master Project has a subproject -- team request
+final_df_MTPE = final_df_MTPE[final_df_MTPE['ProjectID'].isin(project_ids_with_subprojects)]
 
 # # # Auth and access to G-sheets MT and MTPE
 
