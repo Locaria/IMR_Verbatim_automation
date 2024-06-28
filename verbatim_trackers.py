@@ -277,6 +277,13 @@ final_df['Project_Type'] = final_df.apply(
     lambda row: 'Master Project' if row['Project_Type'] == 'Unknown' and row['Project_Order'] == 'Master Project' else row['Project_Type'],
     axis=1
 )
+
+# Identify Projects IDs with at least one Subproject 
+project_ids_with_subprojects = final_df[final_df['Project_Order'] == 'Subproject']['ProjectID'].unique()
+
+# Filter the final_df to have only sheets that a Master Project has a subproject -- team request
+final_df = final_df[final_df['ProjectID'].isin(project_ids_with_subprojects)]
+
 # Order the columns according the team request 
 final_df = final_df[['ProjectID', 'Project_Type', 'dateCreated', 'name', 'Language', 'Analysis_word_all', 'Project_Order']]
 
