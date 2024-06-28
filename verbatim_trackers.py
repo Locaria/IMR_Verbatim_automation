@@ -6,6 +6,68 @@ import time
 import gspread
 import pandas as pd
 from oauth2client.service_account import ServiceAccountCredentials
+import sys
+
+# Ignore warnings
+import warnings
+warnings.filterwarnings("ignore")
+
+# Auth and access to G-sheets 
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name('C:/Users/yngrid.figlioli/Desktop/AAEE/IMR/verbetim_auto/global-ace-417010-a45b5fe90edc.json', scope)
+client = gspread.authorize(creds)
+
+
+############## LOGGING ####################
+## Setting all prints to be logged in the Google Sheet
+## https://docs.google.com/spreadsheets/d/1mXwqEiG2LKngwFaIb6AepGNUbUSmYngjYnh1nzl3iLU/
+
+# LOGSHEET = "1mXwqEiG2LKngwFaIb6AepGNUbUSmYngjYnh1nzl3iLU"
+# logging_sheet = client.open_by_key(LOGSHEET)
+# logging_sheet_tab = logging_sheet.get_worksheet(0)
+
+# class SheetLogger:
+#     def __init__(self, worksheet, batch_size=10):
+#         self.worksheet = worksheet
+#         self.batch_size = batch_size #Once the batch size reaches a specified limit (default is 10), it flushes the data to the Google Sheet.
+#         self.batch_data = []
+#         self.api_write_counter = 0
+#         self.api_write_reset_time = datetime.now()
+
+#     def check_api_limit(self):
+#         elapsed_time = (datetime.now() - self.api_write_reset_time).total_seconds()
+#         if elapsed_time < 60:
+#             if self.api_write_counter >= 59:
+#                 print(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " - API limit reached. Pausing for 60 seconds.")
+#                 time.sleep(60)
+#                 self.api_write_counter = 0
+#                 self.api_write_reset_time = datetime.now()
+#         else:
+#             self.api_write_counter = 0
+#             self.api_write_reset_time = datetime.now()
+
+#     def write(self, message):
+#         lines = message.split('\n')
+#         for line in lines:
+#             if line:  # Only append non-empty lines
+#                 self.batch_data.append([line])
+#                 if len(self.batch_data) >= self.batch_size:
+#                     self.flush()
+# #flush appends all the collected rows at once, reducing the number of individual API calls.
+#     def flush(self):
+#         if self.batch_data:
+#             self.check_api_limit()
+#             self.worksheet.append_rows(self.batch_data)
+#             self.batch_data = []
+#             self.api_write_counter += 1
+
+# sheet_logger = SheetLogger(logging_sheet_tab)  # Redirect standard output and standard error to the logger
+# sys.stdout = sheet_logger
+# sys.stderr = sheet_logger
+# ##########################################
+
+
+# print(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " - Running IMR Cost Tracker Updates.")
 
 #Phrase connection
 url = "https://cloud.memsource.com/web/api2/v1/auth/login"
@@ -14,7 +76,7 @@ credentials = {
     "password": password
 }
 
-# Função para autenticar e obter o token
+# Auth function and get token
 def get_auth_token():
     url = "https://cloud.memsource.com/web/api2/v1/auth/login"
     credentials = {
@@ -43,16 +105,13 @@ access_token = get_auth_token()
 #sleep time
 time.sleep(1)
 
-# # Verificar se o token está correto
-# print("Using token:", access_token)
-
 # Config auth headers
 headers = {
     "Authorization": f"Bearer {access_token}"
 }
 
-# # Log dos cabeçalhos para depuração
-# print("Authorization headers:", headers)
+# # Header log
+
 # projects URL
 get_projects_url = "https://cloud.memsource.com/web/api2/v1/projects"
 print("Projects URL:", get_projects_url)
@@ -80,7 +139,7 @@ def get_projects_by_client(client_name):
 
     return projects_list
 
-#filtering only 'Harris Poll'
+#filtering only 'Harris Poll' client
 client_name = "Harris Poll"
 all_projects_data = get_projects_by_client(client_name)
 
@@ -147,6 +206,7 @@ def get_analysis_words(analyseUid):
 df['Analysis_word_all'] = df['Analysis_uID'].apply(lambda uid: get_analysis_words(uid) if uid else 0)
 
 #Creating Rules for naming convention -- this convetions were create by the IMR team in order to be able to classify and filter the verbatims for this project
+
 #Funcion to create and classify project order by Master and subproject
 def classify_project(name):
     if name.startswith('#'):
@@ -219,47 +279,124 @@ final_df['Project_Type'] = final_df.apply(
 )
 # Order the columns according the team request 
 final_df = final_df[['ProjectID', 'Project_Type', 'dateCreated', 'name', 'Language', 'Analysis_word_all', 'Project_Order']]
-final_df
 
-# Auth and access to G-sheets 
+# Creating final_df_MT df in order to push to a diff G-sheet
+final_df_MT = final_df[(final_df['Project_Type'] == 'Master Project') | (final_df['Project_Type'] == 'MT')]
+
+# Creating final_df_MTPE df in order to push to a diff G-sheet
+final_df_MTPE = final_df[(final_df['Project_Type'] == 'Master Project') | (final_df['Project_Type'] == 'MTPE')]
+
+
+# # # Auth and access to G-sheets MT and MTPE
+
+# Auth and G-Sheet access 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name('C:/Users/yngrid.figlioli/Desktop/AAEE/IMR/verbetim_auto/global-ace-417010-a45b5fe90edc.json', scope)
 client = gspread.authorize(creds)
 
-# Open Verbatims G-sheet
-spreadsheet_id = '1A7KjZ2sPpIHNI8u5XYqBPBkBaSiVCvqQNjx5YNA_HfQ'
-spreadsheet = client.open_by_key(spreadsheet_id)
+# Open G-sheets
+spreadsheet_mt_id = '1A7KjZ2sPpIHNI8u5XYqBPBkBaSiVCvqQNjx5YNA_HfQ' #MT G-sheet
+spreadsheet_mt = client.open_by_key(spreadsheet_mt_id)
+spreadsheet_mtpe_id = '1ZGEINoNlpbS4iVDldvOI8TBpZanzl2nTjnKVjqQYe2g' #MTPE G-sheet
+spreadsheet_mtpe = client.open_by_key(spreadsheet_mtpe_id)
 
-#Making sure that the final df is correct and ordered
-final_df = final_df[['ProjectID', 'Project_Type', 'dateCreated', 'name', 'Language', 'Analysis_word_all', 'Project_Order']]
-if final_df.empty:
-    print("O DataFrame final_df está vazio.")
+#MT_Verbatims_Trackers
+# Making sure that the df is prepared 
+final_df_MT = final_df_MT[['ProjectID', 'Project_Type', 'dateCreated', 'name', 'Language', 'Analysis_word_all', 'Project_Order']]
+
+# Check if final_df is empty
+if final_df_MT.empty:
+    print("No data found in the The final_df_MT.")
 else:
-    # Filtering first the master projects  - we'll create a tab per master project, according the requested
-    if 'Project_Order' in final_df.columns:
-        master_projects = final_df[final_df['Project_Order'] == 'Master Project']
+    # Filtering the Master Projects
+    if 'Project_Order' in final_df_MT.columns:
+        master_projects = final_df_MT[final_df_MT['Project_Order'] == 'Master Project']
     else:
-        print("Coluna 'Project_Order' não encontrada no DataFrame")
+        print("Column 'Project_Order' not found")
 
-    # Creting a tab per master project and adding the subprojects, using the Project_ID to match it 
+    # Creating a sheet for each Master Project and adding the subprojects
     for _, master_project in master_projects.iterrows():
         project_id = master_project['ProjectID']
-        project_name = master_project['name']  
+        project_name = master_project['name']  # The name of the sheet is the name of the project -- as requested by the team
 
-        #Limiting the name of the sheet to 100 caracters, considering its being created like the project name, as requested by the team
+        # Limiting the name of the sheet
         if len(project_name) > 100:
             project_name = project_name[:100]
 
-        #Creating the a new sheet
-        new_sheet = spreadsheet.add_worksheet(title=project_name, rows="100", cols="20")
+        new_sheet = spreadsheet_mt.add_worksheet(title=project_name, rows="100", cols="20")
+        subprojects = final_df_MT[final_df_MT['ProjectID'] == project_id]
 
-        # Filtering the subprojects with the same ProjectID
-        subprojects = final_df[final_df['ProjectID'] == project_id]
-
-        # Converting the subprojects to a list of lists in order to insert them into the G-sheet
+        #Converting the subprojects in a list of lists so we can add them to the Master Project sheet easily
         subprojects_list = subprojects.values.tolist()
 
-        #Adding the data for each subproject for each new sheet.
+        # Adding the subprojects to the sheets created
         new_sheet.update('A1', [subprojects.columns.values.tolist()] + subprojects_list)
 
-    print("Sheets criadas com sucesso!")
+    print("All done, new MT projects sheets created!")
+
+#MTPE_Verbatims_Trackers
+final_df_MTPE = final_df_MTPE[['ProjectID', 'Project_Type', 'dateCreated', 'name', 'Language', 'Analysis_word_all', 'Project_Order']]
+
+if final_df_MTPE.empty:
+    print("The final_df_MTPE is empty.")
+else:
+    if 'Project_Order' in final_df_MTPE.columns:
+        master_projects = final_df_MTPE[final_df_MTPE['Project_Order'] == 'Master Project']
+    else:
+        print("Column 'Project_Order' not found")
+
+    for _, master_project in master_projects.iterrows():
+        project_id = master_project['ProjectID']
+        project_name = master_project['name'] 
+        if len(project_name) > 100:
+            project_name = project_name[:100]
+        new_sheet = spreadsheet_mtpe.add_worksheet(title=project_name, rows="100", cols="20")#spreadsheet_mtpe
+        subprojects = final_df_MTPE[final_df_MTPE['ProjectID'] == project_id]
+        subprojects_list = subprojects.values.tolist()
+        new_sheet.update('A1', [subprojects.columns.values.tolist()] + subprojects_list)
+    print("All done, new MTPE projects sheets created!!")
+
+
+
+# # # Auth and access to G-sheets 
+# # scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+# # creds = ServiceAccountCredentials.from_json_keyfile_name('C:/Users/yngrid.figlioli/Desktop/AAEE/IMR/verbetim_auto/global-ace-417010-a45b5fe90edc.json', scope)
+# # client = gspread.authorize(creds)
+
+# # Open Verbatims G-sheet
+# spreadsheet_id = '1A7KjZ2sPpIHNI8u5XYqBPBkBaSiVCvqQNjx5YNA_HfQ'
+# spreadsheet = client.open_by_key(spreadsheet_id)
+
+# #Making sure that the final df is correct and ordered
+# final_df = final_df[['ProjectID', 'Project_Type', 'dateCreated', 'name', 'Language', 'Analysis_word_all', 'Project_Order']]
+# if final_df.empty:
+#     print("O DataFrame final_df está vazio.")
+# else:
+#     # Filtering first the master projects  - we'll create a tab per master project, according the requested
+#     if 'Project_Order' in final_df.columns:
+#         master_projects = final_df[final_df['Project_Order'] == 'Master Project']
+#     else:
+#         print("Coluna 'Project_Order' não encontrada no DataFrame")
+
+#     # Creting a tab per master project and adding the subprojects, using the Project_ID to match it 
+#     for _, master_project in master_projects.iterrows():
+#         project_id = master_project['ProjectID']
+#         project_name = master_project['name']  
+
+#         #Limiting the name of the sheet to 100 caracters, considering its being created like the project name, as requested by the team
+#         if len(project_name) > 100:
+#             project_name = project_name[:100]
+
+#         #Creating the a new sheet
+#         new_sheet = spreadsheet.add_worksheet(title=project_name, rows="100", cols="20")
+
+#         # Filtering the subprojects with the same ProjectID
+#         subprojects = final_df[final_df['ProjectID'] == project_id]
+
+#         # Converting the subprojects to a list of lists in order to insert them into the G-sheet
+#         subprojects_list = subprojects.values.tolist()
+
+#         #Adding the data for each subproject for each new sheet.
+#         new_sheet.update('A1', [subprojects.columns.values.tolist()] + subprojects_list)
+
+#     print("Sheets criadas com sucesso!")
