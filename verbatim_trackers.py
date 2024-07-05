@@ -7,67 +7,73 @@ import gspread
 import pandas as pd
 from oauth2client.service_account import ServiceAccountCredentials
 import sys
+import os
+from google.oauth2.service_account import Credentials 
+# from usernames import *
+
 
 # Ignore warnings
 import warnings
 warnings.filterwarnings("ignore")
 
 # Auth and access to G-sheets 
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name('C:/Users/yngrid.figlioli/Desktop/AAEE/IMR/verbetim_auto/global-ace-417010-a45b5fe90edc.json', scope)
+scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+#creds = ServiceAccountCredentials.from_json_keyfile_name('C:/Users/yngrid.figlioli/Desktop/AAEE/IMR/verbetim_auto/global-ace-417010-a45b5fe90edc.json', scope)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+service_account_file = os.path.join(script_dir, 'global-ace-417010-a45b5fe90edc.json')
+creds = Credentials.from_service_account_file(service_account_file, scopes=scopes)
 client = gspread.authorize(creds)
 
+############# LOGGING ####################
+# Setting all prints to be logged in the Google Sheet
+# https://docs.google.com/spreadsheets/d/1mXwqEiG2LKngwFaIb6AepGNUbUSmYngjYnh1nzl3iLU/
 
-############## LOGGING ####################
-## Setting all prints to be logged in the Google Sheet
-## https://docs.google.com/spreadsheets/d/1mXwqEiG2LKngwFaIb6AepGNUbUSmYngjYnh1nzl3iLU/
+LOGSHEET = "1mXwqEiG2LKngwFaIb6AepGNUbUSmYngjYnh1nzl3iLU"
+logging_sheet = client.open_by_key(LOGSHEET)
+logging_sheet_tab = logging_sheet.get_worksheet(0)
 
-# LOGSHEET = "1mXwqEiG2LKngwFaIb6AepGNUbUSmYngjYnh1nzl3iLU"
-# logging_sheet = client.open_by_key(LOGSHEET)
-# logging_sheet_tab = logging_sheet.get_worksheet(0)
+class SheetLogger:
+    def __init__(self, worksheet, batch_size=10):
+        self.worksheet = worksheet
+        self.batch_size = batch_size #Once the batch size reaches a specified limit (default is 10), it flushes the data to the Google Sheet.
+        self.batch_data = []
+        self.api_write_counter = 0
+        self.api_write_reset_time = datetime.now()
 
-# class SheetLogger:
-#     def __init__(self, worksheet, batch_size=10):
-#         self.worksheet = worksheet
-#         self.batch_size = batch_size #Once the batch size reaches a specified limit (default is 10), it flushes the data to the Google Sheet.
-#         self.batch_data = []
-#         self.api_write_counter = 0
-#         self.api_write_reset_time = datetime.now()
+    def check_api_limit(self):
+        elapsed_time = (datetime.now() - self.api_write_reset_time).total_seconds()
+        if elapsed_time < 60:
+            if self.api_write_counter >= 59:
+                print(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " - API limit reached. Pausing for 60 seconds.")
+                time.sleep(60)
+                self.api_write_counter = 0
+                self.api_write_reset_time = datetime.now()
+        else:
+            self.api_write_counter = 0
+            self.api_write_reset_time = datetime.now()
 
-#     def check_api_limit(self):
-#         elapsed_time = (datetime.now() - self.api_write_reset_time).total_seconds()
-#         if elapsed_time < 60:
-#             if self.api_write_counter >= 59:
-#                 print(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " - API limit reached. Pausing for 60 seconds.")
-#                 time.sleep(60)
-#                 self.api_write_counter = 0
-#                 self.api_write_reset_time = datetime.now()
-#         else:
-#             self.api_write_counter = 0
-#             self.api_write_reset_time = datetime.now()
+    def write(self, message):
+        lines = message.split('\n')
+        for line in lines:
+            if line:  # Only append non-empty lines
+                self.batch_data.append([line])
+                if len(self.batch_data) >= self.batch_size:
+                    self.flush()
+#flush appends all the collected rows at once, reducing the number of individual API calls.
+    def flush(self):
+        if self.batch_data:
+            self.check_api_limit()
+            self.worksheet.append_rows(self.batch_data)
+            self.batch_data = []
+            self.api_write_counter += 1
 
-#     def write(self, message):
-#         lines = message.split('\n')
-#         for line in lines:
-#             if line:  # Only append non-empty lines
-#                 self.batch_data.append([line])
-#                 if len(self.batch_data) >= self.batch_size:
-#                     self.flush()
-# #flush appends all the collected rows at once, reducing the number of individual API calls.
-#     def flush(self):
-#         if self.batch_data:
-#             self.check_api_limit()
-#             self.worksheet.append_rows(self.batch_data)
-#             self.batch_data = []
-#             self.api_write_counter += 1
-
-# sheet_logger = SheetLogger(logging_sheet_tab)  # Redirect standard output and standard error to the logger
-# sys.stdout = sheet_logger
-# sys.stderr = sheet_logger
-# ##########################################
+sheet_logger = SheetLogger(logging_sheet_tab)  # Redirect standard output and standard error to the logger
+sys.stdout = sheet_logger
+sys.stderr = sheet_logger
+##########################################
 
 
-# print(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " - Running IMR Cost Tracker Updates.")
+print(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " - Running IMR Verbatim Trackers Updates.")
 
 #Phrase connection
 url = "https://cloud.memsource.com/web/api2/v1/auth/login"
@@ -341,26 +347,26 @@ else:
         if len(project_name) > 100:
             project_name = project_name[:100]
 
-             # Check if sheet exists and delete if it does
+        # Verify if the sheet exists
         try:
             existing_sheet = spreadsheet_mt.worksheet(project_name)
-            spreadsheet_mt.del_worksheet(existing_sheet)
-            print(f"Existing sheet '{project_name}' deleted.")
+            print(f"Sheet '{project_name}' exists, updating...")
         except gspread.exceptions.WorksheetNotFound:
-            pass  # Sheet does not exist, no action needed
+            existing_sheet = spreadsheet_mt.add_worksheet(title=project_name, rows="100", cols="20")
+            print(f"Sheet '{project_name}' created.")
 
-        time.sleep(2)#waiting 2sec to avoid quota limitation
+        time.sleep(2)  # API waiting time
 
-        new_sheet = spreadsheet_mt.add_worksheet(title=project_name, rows="100", cols="20")
         subprojects = final_df_MT[final_df_MT['ProjectID'] == project_id]
 
-        #Converting the subprojects in a list of lists so we can add them to the Master Project sheet easily
+        # Convert the subprojects to a list of lists and adding it to the sheet
         subprojects_list = subprojects.values.tolist()
 
-        # Adding the subprojects to the sheets created
-        new_sheet.update('A1', [subprojects.columns.values.tolist()] + subprojects_list)
+        # Update existing or new sheet 
+        existing_sheet.clear()  
+        existing_sheet.update('A1', [subprojects.columns.values.tolist()] + subprojects_list)
 
-    print("All done, new MT projects sheets created!")
+    print("All done, MT projects sheets updated or created!")
 
 #MTPE_Verbatims_Trackers
 final_df_MTPE = final_df_MTPE[['ProjectID', 'Project_Type', 'dateCreated', 'name', 'Language', 'Analysis_word_all', 'Project_Order']]
@@ -378,21 +384,26 @@ else:
         project_name = master_project['name'] 
         if len(project_name) > 100:
             project_name = project_name[:100]
-             # Check if sheet exists and delete if it does
+    # Verify if the sheet exists
         try:
-            existing_sheet = spreadsheet_mtpe.worksheet(project_name)
-            spreadsheet_mtpe.del_worksheet(existing_sheet)
-            print(f"Existing sheet '{project_name}' deleted.")
+            existing_sheet = spreadsheet_mt.worksheet(project_name)
+            print(f"Sheet '{project_name}' exists, updating...")
         except gspread.exceptions.WorksheetNotFound:
-            pass  # Sheet does not exist, no action needed
+            existing_sheet = spreadsheet_mtpe.add_worksheet(title=project_name, rows="100", cols="20")
+            print(f"Sheet '{project_name}' created.")
 
-        time.sleep(2)#waiting 2sec to avoid quota limitation
+        time.sleep(2)  # API waiting time
 
-        new_sheet = spreadsheet_mtpe.add_worksheet(title=project_name, rows="100", cols="20")#spreadsheet_mtpe
         subprojects = final_df_MTPE[final_df_MTPE['ProjectID'] == project_id]
+
+        # Convert the subprojects to a list of lists and adding it to the sheet
         subprojects_list = subprojects.values.tolist()
-        new_sheet.update('A1', [subprojects.columns.values.tolist()] + subprojects_list)
-    print("All done, new MTPE projects sheets created!!")
+
+        # Update existing or new sheet 
+        existing_sheet.clear()  
+        existing_sheet.update('A1', [subprojects.columns.values.tolist()] + subprojects_list)
+
+    print("All done, MTPE projects sheets updated or created!")
 
 
 
